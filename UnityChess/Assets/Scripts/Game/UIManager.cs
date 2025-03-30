@@ -46,6 +46,7 @@ public class UIManager : MonoBehaviourSingleton<UIManager> {
 	/// Initialises the UIManager, subscribes to game events, and configures initial UI settings.
 	/// </summary>
 	private void Start() {
+
 		// Subscribe to various game events.
 		GameManager.NewGameStartedEvent += OnNewGameStarted;
 		GameManager.GameEndedEvent += OnGameEnded;
@@ -123,6 +124,7 @@ public class UIManager : MonoBehaviourSingleton<UIManager> {
 
 		// Retrieve the latest half-move and add it to the move history UI.
 		GameManager.Instance.HalfMoveTimeline.TryGetCurrent(out HalfMove lastMove);
+
 		AddMoveToHistory(lastMove, sideToMove.Complement());
 	}
 
@@ -292,4 +294,7 @@ public class UIManager : MonoBehaviourSingleton<UIManager> {
 	/// Updates the game string input field with the current serialized game state.
 	/// </summary>
 	private void UpdateGameStringInputField() => GameStringInputField.text = GameManager.Instance.SerializeGame();
+
+
 }
+
