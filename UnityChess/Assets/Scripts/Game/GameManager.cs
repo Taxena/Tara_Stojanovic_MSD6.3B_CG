@@ -339,6 +339,36 @@ public class GameManager : MonoBehaviourSingleton<GameManager> {
 		return game.TryGetLegalMovesForPiece(piece, out _);
 	}
 
-
-
+	public bool TryGetLegalMoveAndExecute(Square startSquare, Square endSquare)
+	{
+		if (!game.TryGetLegalMove(startSquare, endSquare, out Movement move))
+		{
+			return false;
+		}
+    
+		if (move is SpecialMove specialMove)
+		{
+			if (specialMove is CastlingMove castlingMove)
+			{
+				BoardManager.Instance.CastleRook(castlingMove.RookSquare, castlingMove.GetRookEndSquare());
+			}
+			else if (specialMove is EnPassantMove enPassantMove)
+			{
+				BoardManager.Instance.TryDestroyVisualPiece(enPassantMove.CapturedPawnSquare);
+			}
+			else if (specialMove is PromotionMove promotionMove)
+			{
+				if (promotionMove.PromotionPiece == null)
+				{
+					promotionMove.SetPromotionPiece(new Queen(SideToMove));
+				}
+            
+				BoardManager.Instance.TryDestroyVisualPiece(promotionMove.Start);
+				BoardManager.Instance.TryDestroyVisualPiece(promotionMove.End);
+				BoardManager.Instance.CreateAndPlacePieceGO(promotionMove.PromotionPiece, promotionMove.End);
+			}
+		}
+    
+		return TryExecuteMove(move);
+	}
 }

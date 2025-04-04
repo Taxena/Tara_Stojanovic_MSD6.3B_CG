@@ -217,7 +217,7 @@ public class BoardManager : MonoBehaviourSingleton<BoardManager> {
 	/// <summary>
 	/// Clears all visual pieces from the board.
 	/// </summary>
-	private void ClearBoard() {
+	public void ClearBoard() {
 		// Retrieve all VisualPiece components in child objects.
 		VisualPiece[] visualPiece = GetComponentsInChildren<VisualPiece>(true);
 		// Destroy each VisualPiece GameObject immediately.

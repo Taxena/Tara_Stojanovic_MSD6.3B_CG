@@ -6,27 +6,27 @@ using UnityChess;
 using UnityEngine;
 using System;
 
+
 public class TurnManager : NetworkBehaviour
 {
     public static TurnManager Instance { get; private set; }
 
-    public NetworkVariable<Side> NetworkedTurn = new NetworkVariable<Side>(
-        Side.White,
-        NetworkVariableReadPermission.Everyone,
-        NetworkVariableWritePermission.Server
-    );
+    private NetworkVariable<int> currentTurn = new NetworkVariable<int>(0, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+    
+    public static event Action<Side> OnTurnChanged;
 
-    private NetworkVariable<bool> isWhiteTurn = new NetworkVariable<bool>(true);
-    private NetworkVariable<ulong> currentTurnPlayerId = new NetworkVariable<ulong>(0);
+    private NetworkVariable<ulong> whitePlayerId = new NetworkVariable<ulong>(default, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+        
+    private NetworkVariable<ulong> blackPlayerId = new NetworkVariable<ulong>(default, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
-    public event Action<bool> OnTurnChanged;
-    public event Action<ulong> OnCurrentPlayerChanged;
+    private GameManager gameManager;
+    private BoardManager boardManager;
+    
+    private Side localPlayerSide = Side.None;
 
-    public enum PlayerColor
-    {
-        White,
-        Black
-    }
+    public bool IsLocalPlayerTurn => GetCurrentTurnSide() == localPlayerSide;
+    
+    public Side GetCurrentTurnSide() => currentTurn.Value % 2 == 0 ? Side.White : Side.Black;
 
     private void Awake()
     {
@@ -34,37 +34,223 @@ public class TurnManager : NetworkBehaviour
         {
             Instance = this;
         }
-        else
+        else if (Instance != this)
         {
             Destroy(gameObject);
         }
     }
 
-
-    // Start is called before the first frame update
-    void Start()
+    private void Start()
     {
-        if (IsServer)
+        gameManager = GameManager.Instance;
+        boardManager = BoardManager.Instance;
+        
+        GameManager.MoveExecutedEvent += OnMoveExecuted;
+        
+        currentTurn.OnValueChanged += OnTurnValueChanged;
+        
+        NetworkManager.Singleton.OnClientConnectedCallback += OnClientConnected;
+    }
+    
+    private void OnDestroy()
+    {
+        GameManager.MoveExecutedEvent -= OnMoveExecuted;
+        
+        if (NetworkManager.Singleton != null)
         {
-            GameManager.MoveExecutedEvent += OnMoveExecuted;
+            NetworkManager.Singleton.OnClientConnectedCallback -= OnClientConnected;
+        }
+        
+        if (Instance == this)
+        {
+            Instance = null;
         }
     }
 
-    private void OnDestroy()
+    public override void OnNetworkSpawn()
     {
+        base.OnNetworkSpawn();
+
         if (IsServer)
         {
-            GameManager.MoveExecutedEvent -= OnMoveExecuted;
+            whitePlayerId.Value = NetworkManager.ServerClientId;
+            localPlayerSide = Side.White;
+            
+            currentTurn.Value = 0;
+            
+            foreach (ulong clientId in NetworkManager.Singleton.ConnectedClientsIds)
+            {
+                if (clientId != NetworkManager.ServerClientId)
+                {
+                    blackPlayerId.Value = clientId;
+                    break;
+                }
+            }
+        }
+        else
+        {
+            localPlayerSide = Side.Black;
+            
+            RequestBlackPlayerAssignmentServerRpc(NetworkManager.Singleton.LocalClientId);
+        }
+
+        if (OnTurnChanged != null)
+        {
+            OnTurnChanged.Invoke(GetCurrentTurnSide());
+        }
+        
+        UpdatePieceInteractivity();
+    }
+
+    private void OnTurnValueChanged(int previous, int current)
+    {
+        Side currentSide = GetCurrentTurnSide();
+        OnTurnChanged?.Invoke(currentSide);
+        
+        UpdatePieceInteractivity();
+    }
+
+    private void UpdatePieceInteractivity()
+    {
+        VisualPiece[] allPieces = FindObjectsOfType<VisualPiece>();
+        
+        foreach (VisualPiece piece in allPieces)
+        {
+            bool canInteract = IsLocalPlayerTurn && piece.PieceColor == localPlayerSide;
+            piece.enabled = canInteract;
         }
     }
 
     private void OnMoveExecuted()
     {
-        if (!IsServer) return;
-
-        Side nextTurn = GameManager.Instance.SideToMove;
-        NetworkedTurn.Value = nextTurn;
+        if (IsServer)
+        {
+            StartCoroutine(DelayedTurnChange());
+        }
+    }
+    
+    private IEnumerator DelayedTurnChange()
+    {
+        yield return new WaitForSeconds(0.1f);
+        
+        currentTurn.Value += 1;
+        
+        UpdatePieceInteractivity();
+    }
+    
+    public void NotifyOfMove(Square startSquare, Square endSquare, Side pieceSide)
+    {
+        if (!IsServer)
+        {
+            string startSquareStr = startSquare.ToString();
+            string endSquareStr = endSquare.ToString();
+            
+            MoveServerRpc(startSquareStr, endSquareStr);
+        }
+    }
+    
+    [ServerRpc(RequireOwnership = false)]
+    private void MoveServerRpc(string startSquareStr, string endSquareStr, ServerRpcParams rpcParams = default)
+    {
+        ulong clientId = rpcParams.Receive.SenderClientId;
+        
+        Side currentSide = GetCurrentTurnSide();
+        bool isValidPlayer = (currentSide == Side.White && clientId == whitePlayerId.Value) ||
+                           (currentSide == Side.Black && clientId == blackPlayerId.Value);
+        
+        BroadcastMoveClientRpc(startSquareStr, endSquareStr);
+    }
+    
+    [ClientRpc]
+    private void BroadcastMoveClientRpc(string startSquareStr, string endSquareStr)
+    {
+        Square startSquare = SquareUtil.StringToSquare(startSquareStr);
+        Square endSquare = SquareUtil.StringToSquare(endSquareStr);
+        
+        if (gameManager.TryGetLegalMoveAndExecute(startSquare, endSquare))
+        {
+        }
+        else
+        {
+            SimulateMove(startSquare, endSquare);
+        }
+    }
+    
+    private void SimulateMove(Square startSquare, Square endSquare)
+    {
+        GameObject pieceGO = boardManager.GetPieceGOAtPosition(startSquare);
+        if (pieceGO == null)
+        {
+            return;
+        }
+        
+        GameObject targetSquareGO = boardManager.GetSquareGOByPosition(endSquare);
+        if (targetSquareGO == null)
+        {
+            return;
+        }
+        
+        boardManager.TryDestroyVisualPiece(endSquare);
+        
+        Transform pieceTransform = pieceGO.transform;
+        
+        PieceController networkController = pieceGO.GetComponent<PieceController>();
+        if (networkController != null)
+        {
+            MonoBehaviour[] behaviours = pieceGO.GetComponents<MonoBehaviour>();
+            foreach (MonoBehaviour behaviour in behaviours)
+            {
+                if (behaviour != networkController)
+                {
+                    behaviour.enabled = false;
+                }
+            }
+        }
+        
+        pieceTransform.SetParent(targetSquareGO.transform, false);
+        pieceTransform.position = targetSquareGO.transform.position;
+        
+        if (networkController != null)
+        {
+            MonoBehaviour[] behaviours = pieceGO.GetComponents<MonoBehaviour>();
+            foreach (MonoBehaviour behaviour in behaviours)
+            {
+                behaviour.enabled = true;
+            }
+        }
+    }
+    
+    public void OnClientConnected(ulong clientId)
+    {
+        if (IsServer && clientId != NetworkManager.ServerClientId)
+        {
+            if (blackPlayerId.Value == 0)
+            {
+                blackPlayerId.Value = clientId;
+                
+                SendGameStateToClientClientRpc(clientId);
+            }
+        }
+    }
+    
+    [ClientRpc]
+    private void SendGameStateToClientClientRpc(ulong targetClientId)
+    {
+        if (NetworkManager.Singleton.LocalClientId == targetClientId)
+        {
+            localPlayerSide = Side.Black;
+            
+            OnTurnChanged?.Invoke(GetCurrentTurnSide());
+            UpdatePieceInteractivity();
+        }
     }
 
-
+    [ServerRpc(RequireOwnership = false)]
+    private void RequestBlackPlayerAssignmentServerRpc(ulong clientId)
+    {
+        if (blackPlayerId.Value == 0)
+        {
+            blackPlayerId.Value = clientId;
+        }
+    }
 }
