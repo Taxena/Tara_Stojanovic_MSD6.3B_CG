@@ -12,32 +12,23 @@ public class TurnManager : NetworkBehaviour
     public static TurnManager Instance { get; private set; }
 
     private NetworkVariable<int> currentTurn = new NetworkVariable<int>(0, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
-    
     public static event Action<Side> OnTurnChanged;
-
     private NetworkVariable<ulong> whitePlayerId = new NetworkVariable<ulong>(default, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
-        
     private NetworkVariable<ulong> blackPlayerId = new NetworkVariable<ulong>(default, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
     private GameManager gameManager;
     private BoardManager boardManager;
-    
     private Side localPlayerSide = Side.None;
 
     public bool IsLocalPlayerTurn => GetCurrentTurnSide() == localPlayerSide;
-    
     public Side GetCurrentTurnSide() => currentTurn.Value % 2 == 0 ? Side.White : Side.Black;
 
     private void Awake()
     {
         if (Instance == null)
-        {
             Instance = this;
-        }
         else if (Instance != this)
-        {
             Destroy(gameObject);
-        }
     }
 
     private void Start()
@@ -46,9 +37,7 @@ public class TurnManager : NetworkBehaviour
         boardManager = BoardManager.Instance;
         
         GameManager.MoveExecutedEvent += OnMoveExecuted;
-        
         currentTurn.OnValueChanged += OnTurnValueChanged;
-        
         NetworkManager.Singleton.OnClientConnectedCallback += OnClientConnected;
     }
     
@@ -57,14 +46,10 @@ public class TurnManager : NetworkBehaviour
         GameManager.MoveExecutedEvent -= OnMoveExecuted;
         
         if (NetworkManager.Singleton != null)
-        {
             NetworkManager.Singleton.OnClientConnectedCallback -= OnClientConnected;
-        }
         
         if (Instance == this)
-        {
             Instance = null;
-        }
     }
 
     public override void OnNetworkSpawn()
@@ -75,7 +60,6 @@ public class TurnManager : NetworkBehaviour
         {
             whitePlayerId.Value = NetworkManager.ServerClientId;
             localPlayerSide = Side.White;
-            
             currentTurn.Value = 0;
             
             foreach (ulong clientId in NetworkManager.Singleton.ConnectedClientsIds)
@@ -90,15 +74,10 @@ public class TurnManager : NetworkBehaviour
         else
         {
             localPlayerSide = Side.Black;
-            
             RequestBlackPlayerAssignmentServerRpc(NetworkManager.Singleton.LocalClientId);
         }
 
-        if (OnTurnChanged != null)
-        {
-            OnTurnChanged.Invoke(GetCurrentTurnSide());
-        }
-        
+        OnTurnChanged?.Invoke(GetCurrentTurnSide());
         UpdatePieceInteractivity();
     }
 
@@ -106,7 +85,6 @@ public class TurnManager : NetworkBehaviour
     {
         Side currentSide = GetCurrentTurnSide();
         OnTurnChanged?.Invoke(currentSide);
-        
         UpdatePieceInteractivity();
     }
 
@@ -115,26 +93,19 @@ public class TurnManager : NetworkBehaviour
         VisualPiece[] allPieces = FindObjectsOfType<VisualPiece>();
         
         foreach (VisualPiece piece in allPieces)
-        {
-            bool canInteract = IsLocalPlayerTurn && piece.PieceColor == localPlayerSide;
-            piece.enabled = canInteract;
-        }
+            piece.enabled = IsLocalPlayerTurn && piece.PieceColor == localPlayerSide;
     }
 
     private void OnMoveExecuted()
     {
         if (IsServer)
-        {
             StartCoroutine(DelayedTurnChange());
-        }
     }
     
     private IEnumerator DelayedTurnChange()
     {
         yield return new WaitForSeconds(0.1f);
-        
         currentTurn.Value += 1;
-        
         UpdatePieceInteractivity();
     }
     
@@ -144,7 +115,6 @@ public class TurnManager : NetworkBehaviour
         {
             string startSquareStr = startSquare.ToString();
             string endSquareStr = endSquare.ToString();
-            
             MoveServerRpc(startSquareStr, endSquareStr);
         }
     }
@@ -167,28 +137,17 @@ public class TurnManager : NetworkBehaviour
         Square startSquare = SquareUtil.StringToSquare(startSquareStr);
         Square endSquare = SquareUtil.StringToSquare(endSquareStr);
         
-        if (gameManager.TryGetLegalMoveAndExecute(startSquare, endSquare))
-        {
-        }
-        else
-        {
+        if (!gameManager.TryGetLegalMoveAndExecute(startSquare, endSquare))
             SimulateMove(startSquare, endSquare);
-        }
     }
     
     private void SimulateMove(Square startSquare, Square endSquare)
     {
         GameObject pieceGO = boardManager.GetPieceGOAtPosition(startSquare);
-        if (pieceGO == null)
-        {
-            return;
-        }
+        if (pieceGO == null) return;
         
         GameObject targetSquareGO = boardManager.GetSquareGOByPosition(endSquare);
-        if (targetSquareGO == null)
-        {
-            return;
-        }
+        if (targetSquareGO == null) return;
         
         boardManager.TryDestroyVisualPiece(endSquare);
         
@@ -199,12 +158,8 @@ public class TurnManager : NetworkBehaviour
         {
             MonoBehaviour[] behaviours = pieceGO.GetComponents<MonoBehaviour>();
             foreach (MonoBehaviour behaviour in behaviours)
-            {
                 if (behaviour != networkController)
-                {
                     behaviour.enabled = false;
-                }
-            }
         }
         
         pieceTransform.SetParent(targetSquareGO.transform, false);
@@ -214,9 +169,7 @@ public class TurnManager : NetworkBehaviour
         {
             MonoBehaviour[] behaviours = pieceGO.GetComponents<MonoBehaviour>();
             foreach (MonoBehaviour behaviour in behaviours)
-            {
                 behaviour.enabled = true;
-            }
         }
     }
     
@@ -227,7 +180,6 @@ public class TurnManager : NetworkBehaviour
             if (blackPlayerId.Value == 0)
             {
                 blackPlayerId.Value = clientId;
-                
                 SendGameStateToClientClientRpc(clientId);
             }
         }
@@ -239,7 +191,6 @@ public class TurnManager : NetworkBehaviour
         if (NetworkManager.Singleton.LocalClientId == targetClientId)
         {
             localPlayerSide = Side.Black;
-            
             OnTurnChanged?.Invoke(GetCurrentTurnSide());
             UpdatePieceInteractivity();
         }
@@ -249,8 +200,6 @@ public class TurnManager : NetworkBehaviour
     private void RequestBlackPlayerAssignmentServerRpc(ulong clientId)
     {
         if (blackPlayerId.Value == 0)
-        {
             blackPlayerId.Value = clientId;
-        }
     }
 }

@@ -73,27 +73,23 @@ public class BoardSynchroniser : NetworkBehaviour
     
     private void UpdateVisualPieces(Board oldBoard, Board newBoard)
     {
-        try
+        for (int file = 1; file <= 8; file++)
         {
-            for (int file = 1; file <= 8; file++)
+            for (int rank = 1; rank <= 8; rank++)
             {
-                for (int rank = 1; rank <= 8; rank++)
+                Square square = new Square(file, rank);
+                Piece newPiece = newBoard[square];
+                Piece oldPiece = oldBoard[square];
+                
+                if (newPiece != oldPiece)
                 {
-                    Square square = new Square(file, rank);
-                    Piece newPiece = newBoard[square];
-                    Piece oldPiece = oldBoard[square];
+                    boardManager.TryDestroyVisualPiece(square);
                     
-                    if (newPiece != oldPiece)
-                    {
-                        boardManager.TryDestroyVisualPiece(square);
-                        
-                        if (newPiece != null)
-                            boardManager.CreateAndPlacePieceGO(newPiece, square);
-                    }
+                    if (newPiece != null)
+                        boardManager.CreateAndPlacePieceGO(newPiece, square);
                 }
             }
         }
-        catch (System.Exception) { }
     }
     
     [ServerRpc(RequireOwnership = false)]
@@ -132,10 +128,7 @@ public class BoardSynchroniser : NetworkBehaviour
         private string value;
         public string Value => value;
         
-        public NetworkString(string value)
-        {
-            this.value = value;
-        }
+        public NetworkString(string value) => this.value = value;
         
         public void NetworkSerialize<T>(BufferSerializer<T> serializer) where T : IReaderWriter
         {

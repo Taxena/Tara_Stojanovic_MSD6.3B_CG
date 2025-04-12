@@ -11,7 +11,6 @@ public class NetworkUI : MonoBehaviour
     [SerializeField] private Button RejoinButton;
     [SerializeField] private Button HostButton;
     [SerializeField] private Button LeaveButton;
-
     [SerializeField] private TMP_InputField sessionCodeInput;
     [SerializeField] private TMP_Text connectionStatusText;
     [SerializeField] private TMP_Text errorMessageText;
@@ -20,16 +19,9 @@ public class NetworkUI : MonoBehaviour
     private string currentSessionCode = "";
     private ConnectionState currentConnectionState = ConnectionState.Disconnected;
     private Coroutine errorMessageCoroutine;
-
     private UnityTransport transport;
 
-    public enum ConnectionState
-    {
-        Disconnected,
-        Connecting,
-        Connected,
-        Failed
-    }
+    public enum ConnectionState { Disconnected, Connecting, Connected, Failed }
 
     private void Awake()
     {
@@ -37,7 +29,13 @@ public class NetworkUI : MonoBehaviour
         RejoinButton.onClick.AddListener(RejoinGame);
         HostButton.onClick.AddListener(HostGame);
         LeaveButton.onClick.AddListener(LeaveGame);
+    }
 
+    private void Start()
+    {
+        transport = NetworkManager.Singleton.GetComponent<UnityTransport>();
+        InvokeRepeating(nameof(CheckTransportState), 1f, 2f);
+        SetConnectionState(ConnectionState.Disconnected);
     }
 
     private void JoinGame()
@@ -49,7 +47,6 @@ public class NetworkUI : MonoBehaviour
         }
 
         string sessionCode = sessionCodeInput.text.Trim().ToUpper();
-
         if (string.IsNullOrEmpty(sessionCode) || sessionCode.Length != 6)
         {
             ShowErrorMessage("Invalid session code. Please enter a 6-character code.");
@@ -57,7 +54,6 @@ public class NetworkUI : MonoBehaviour
         }
 
         currentSessionCode = sessionCode;
-
         SetConnectionState(ConnectionState.Connecting);
 
         byte[] connectionData = System.Text.Encoding.ASCII.GetBytes(sessionCode);
@@ -66,13 +62,8 @@ public class NetworkUI : MonoBehaviour
         NetworkManager.Singleton.OnClientConnectedCallback += OnClientConnected;
         NetworkManager.Singleton.OnClientDisconnectCallback += OnClientDisconnected;
 
-        if (NetworkManager.Singleton.StartClient())
+        if (!NetworkManager.Singleton.StartClient())
         {
-            Debug.Log("Connecting to session: " + sessionCode);
-        }
-        else
-        {
-            Debug.Log("Failed to start client");
             SetConnectionState(ConnectionState.Failed);
             ShowErrorMessage("Failed to connect to server");
         }
@@ -100,13 +91,8 @@ public class NetworkUI : MonoBehaviour
         NetworkManager.Singleton.OnClientConnectedCallback += OnClientConnected;
         NetworkManager.Singleton.OnClientDisconnectCallback += OnClientDisconnected;
 
-        if (NetworkManager.Singleton.StartClient())
+        if (!NetworkManager.Singleton.StartClient())
         {
-            Debug.Log("Attempting to rejoin session: " + currentSessionCode);
-        }
-        else
-        {
-            Debug.Log("Failed to start client for rejoin");
             SetConnectionState(ConnectionState.Failed);
             ShowErrorMessage("Failed to rejoin session");
         }
@@ -127,13 +113,9 @@ public class NetworkUI : MonoBehaviour
         NetworkManager.Singleton.OnClientDisconnectCallback += OnClientDisconnected;
 
         if (NetworkManager.Singleton.StartHost())
-        {
-            Debug.Log("Hosting game with session code: " + currentSessionCode);
             SetConnectionState(ConnectionState.Connected);
-        }
         else
         {
-            Debug.Log("Failed to start host");
             SetConnectionState(ConnectionState.Failed);
             ShowErrorMessage("Failed to host game");
         }
@@ -146,13 +128,10 @@ public class NetworkUI : MonoBehaviour
 
         char[] codeArray = new char[6];
         for (int i = 0; i < 6; i++)
-        {
             codeArray[i] = chars[random.Next(chars.Length)];
-        }
 
         return new string(codeArray);
     }
-
 
     private void LeaveGame()
     {
@@ -164,76 +143,34 @@ public class NetworkUI : MonoBehaviour
 
         NetworkManager.Singleton.OnClientConnectedCallback -= OnClientConnected;
         NetworkManager.Singleton.OnClientDisconnectCallback -= OnClientDisconnected;
-
         NetworkManager.Singleton.Shutdown();
-
-        Debug.Log("Left the game session");
+        
         SetConnectionState(ConnectionState.Disconnected);
     }
-
-    private void CheckIfRunningLocally()
-    {
-        if (transport.ConnectionData.ServerListenAddress == "127.0.0.1")
-        {
-            Debug.LogWarning("Server is listening locally (127.0.0.1) ONLY!");
-        }
-    }
-
-    private void Start()
-    {
-        transport = NetworkManager.Singleton.GetComponent<UnityTransport>();
-
-        if (NetworkManager.Singleton != null)
-        {
-            Debug.Log($"UTP working with IP:{transport.ConnectionData.Address} and Port:{transport.ConnectionData.Port}");
-            
-
-        }
-
-        InvokeRepeating(nameof(CheckTransportState), 1f, 2f);
-        SetConnectionState(ConnectionState.Disconnected);
-    }
-
 
     private void CheckTransportState()
     {
-        if (NetworkManager.Singleton != null && !NetworkManager.Singleton.IsConnectedClient)
+        if (NetworkManager.Singleton != null && !NetworkManager.Singleton.IsConnectedClient && currentConnectionState == ConnectionState.Connected)
         {
-            Debug.Log("Lost connection to the server!");
             SetConnectionState(ConnectionState.Disconnected);
             ShowErrorMessage("Lost connection to server.");
         }
     }
 
-
     private void OnClientConnected(ulong clientId)
     {
-        Debug.Log($"Connected to server with client ID: {clientId}");
-
         if (clientId == NetworkManager.Singleton.LocalClientId || NetworkManager.Singleton.IsHost)
-        {
             SetConnectionState(ConnectionState.Connected);
-        }
     }
 
     private void OnClientDisconnected(ulong clientId)
     {
         if (clientId == NetworkManager.Singleton.LocalClientId)
         {
-            Debug.Log("Disconnected from server");
             SetConnectionState(ConnectionState.Disconnected);
             ShowErrorMessage("Disconnected from the game");
         }
-        else if (NetworkManager.Singleton.IsHost || NetworkManager.Singleton.IsServer)
-        {
-            Debug.Log($"Client {clientId} disconnected");
-        }
     }
-
-
-
-
-
 
     private void SetConnectionState(ConnectionState state)
     {
@@ -253,7 +190,6 @@ public class NetworkUI : MonoBehaviour
                 RejoinButton.interactable = !string.IsNullOrEmpty(currentSessionCode);
                 LeaveButton.interactable = false;
                 break;
-
             case ConnectionState.Connecting:
                 connectionStatusText.text = "Connecting...";
                 connectionStatusText.color = Color.yellow;
@@ -262,7 +198,6 @@ public class NetworkUI : MonoBehaviour
                 RejoinButton.interactable = false;
                 LeaveButton.interactable = true;
                 break;
-
             case ConnectionState.Connected:
                 connectionStatusText.text = "Connected";
                 connectionStatusText.color = Color.green;
@@ -271,7 +206,6 @@ public class NetworkUI : MonoBehaviour
                 RejoinButton.interactable = false;
                 LeaveButton.interactable = true;
                 break;
-
             case ConnectionState.Failed:
                 connectionStatusText.text = "Connection Failed";
                 connectionStatusText.color = Color.red;
@@ -286,9 +220,7 @@ public class NetworkUI : MonoBehaviour
     private void ShowErrorMessage(string message)
     {
         if (errorMessageCoroutine != null)
-        {
             StopCoroutine(errorMessageCoroutine);
-        }
 
         errorMessageCoroutine = StartCoroutine(ShowErrorMessageCoroutine(message));
     }
@@ -297,15 +229,10 @@ public class NetworkUI : MonoBehaviour
     {
         errorMessageText.text = message;
         errorMessageText.gameObject.SetActive(true);
-
         yield return new WaitForSeconds(errorMessageDisplayTime);
-
         errorMessageText.gameObject.SetActive(false);
         errorMessageCoroutine = null;
     }
-
-
-
 
     private void OnDestroy()
     {
@@ -313,11 +240,7 @@ public class NetworkUI : MonoBehaviour
         {
             NetworkManager.Singleton.OnClientConnectedCallback -= OnClientConnected;
             NetworkManager.Singleton.OnClientDisconnectCallback -= OnClientDisconnected;
-
         }
-
         CancelInvoke(nameof(CheckTransportState));
     }
-
-
 }

@@ -27,7 +27,7 @@ public class PieceController : MonoBehaviour
     
     private IEnumerator MonitorPieceMovement()
     {
-        VisualPiece piece = GetComponent<VisualPiece>();
+        VisualPiece piece = visualPiece;
         if (piece == null) yield break;
         
         Transform lastParent = transform.parent;
@@ -55,7 +55,7 @@ public class PieceController : MonoBehaviour
         if (TurnManager.Instance != null && visualPiece != null)
         {
             visualPiece.enabled = TurnManager.Instance.IsLocalPlayerTurn && 
-                                  visualPiece.PieceColor == currentTurnSide;
+                                 visualPiece.PieceColor == currentTurnSide;
         }
     }
     
