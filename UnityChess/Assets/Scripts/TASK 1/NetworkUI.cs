@@ -15,6 +15,7 @@ public class NetworkUI : MonoBehaviour
     [SerializeField] private TMP_Text connectionStatusText;
     [SerializeField] private TMP_Text errorMessageText;
     [SerializeField] private float errorMessageDisplayTime = 3f;
+    [SerializeField] private Button openStoreButton;
 
     private string currentSessionCode = "";
     private ConnectionState currentConnectionState = ConnectionState.Disconnected;
@@ -36,6 +37,11 @@ public class NetworkUI : MonoBehaviour
         transport = NetworkManager.Singleton.GetComponent<UnityTransport>();
         InvokeRepeating(nameof(CheckTransportState), 1f, 2f);
         SetConnectionState(ConnectionState.Disconnected);
+        
+        if (openStoreButton != null)
+        {
+            openStoreButton.onClick.AddListener(OnOpenStoreClicked);
+        }
     }
 
     private void JoinGame()
@@ -233,6 +239,14 @@ public class NetworkUI : MonoBehaviour
         errorMessageText.gameObject.SetActive(false);
         errorMessageCoroutine = null;
     }
+    
+    private void OnOpenStoreClicked()
+    {
+        if (DLCStoreManager.Instance != null)
+        {
+            DLCStoreManager.Instance.ShowStore();
+        }
+    }
 
     private void OnDestroy()
     {
@@ -240,6 +254,11 @@ public class NetworkUI : MonoBehaviour
         {
             NetworkManager.Singleton.OnClientConnectedCallback -= OnClientConnected;
             NetworkManager.Singleton.OnClientDisconnectCallback -= OnClientDisconnected;
+        }
+        
+        if (openStoreButton != null)
+        {
+            openStoreButton.onClick.RemoveListener(OnOpenStoreClicked);
         }
         CancelInvoke(nameof(CheckTransportState));
     }

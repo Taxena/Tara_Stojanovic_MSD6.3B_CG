@@ -120,6 +120,7 @@ public class GameManager : MonoBehaviourSingleton<GameManager> {
 		// Begin a new game.
 		StartNewGame();
 		
+		
 #if DEBUG_VIEW
 		// Enable debug view if compiled with DEBUG_VIEW flag.
 		unityChessDebug.gameObject.SetActive(true);

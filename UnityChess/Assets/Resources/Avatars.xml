@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<avatars>
+    <avatar id="avatar_1">
+        <name>Duck Avatar</name>
+        <price>300</price>
+        <imageUrl>duck_avatar.jpg</imageUrl>
+    </avatar>
+    <avatar id="avatar_2">
+        <name>Flower Avatar</name>
+        <price>500</price>
+        <imageUrl>flower_avatar.jpg</imageUrl>
+    </avatar>
+    <avatar id="avatar_3">
+        <name>Rabbit Avatar</name>
+        <price>750</price>
+        <imageUrl>rabbit_avatar.jpg</imageUrl>
+    </avatar>
+    <avatar id="avatar_4">
+        <name>Sun Avatar</name>
+        <price>400</price>
+        <imageUrl>sun_avatar.jpg</imageUrl>
+    </avatar>
+</avatars>

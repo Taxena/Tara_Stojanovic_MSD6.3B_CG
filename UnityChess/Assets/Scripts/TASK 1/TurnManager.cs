@@ -6,7 +6,6 @@ using UnityChess;
 using UnityEngine;
 using System;
 
-
 public class TurnManager : NetworkBehaviour
 {
     public static TurnManager Instance { get; private set; }

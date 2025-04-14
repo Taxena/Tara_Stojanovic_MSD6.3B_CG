@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "803032924376",
+    "project_id": "tara-chessgame-cg",
+    "storage_bucket": "tara-chessgame-cg.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:803032924376:android:d239bdf6714996be1a57ad",
+        "android_client_info": {
+          "package_name": "com.DefaultCompany.UnityChess"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCdI7ndRe4zm69d4Td1oaayU8Dt0UBK9A0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
