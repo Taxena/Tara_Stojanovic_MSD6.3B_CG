@@ -1,17 +1,20 @@
+// This is a refactored version of the original DLCStoreManager to support per-player coins and avatar ownership.
+// All changes ensure data is stored per-client and synced correctly across the network.
+
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
+using TMPro;
 using Unity.Netcode;
 using Firebase.Storage;
-using System;
-using TMPro;
 using System.Xml;
 
 public class DLCStoreManager : NetworkBehaviour
 {
     public static DLCStoreManager Instance { get; private set; }
-    
+
     [SerializeField] private GameObject storePanel;
     [SerializeField] private Transform avatarContainer;
     [SerializeField] private Button closeStoreButton;
@@ -21,392 +24,250 @@ public class DLCStoreManager : NetworkBehaviour
     [SerializeField] private Image blackPlayerAvatarDisplay;
     [SerializeField] private int startingCoins = 1000;
     [SerializeField] private FirebaseGameLogger firebaseLogger;
-    
-    private NetworkVariable<int> playerCoins = new NetworkVariable<int>(0, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
-    private NetworkVariable<NetworkString> currentAvatarId = new NetworkVariable<NetworkString>(new NetworkString(""), 
-        NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
-    
-    private List<AvatarData> availableAvatars = new List<AvatarData>();
-    private Dictionary<string, bool> ownedAvatars = new Dictionary<string, bool>();
-    private Dictionary<string, Texture2D> avatarTextures = new Dictionary<string, Texture2D>();
-    private Dictionary<ulong, string> playerAvatars = new Dictionary<ulong, string>();
-    
+
+    private Dictionary<ulong, int> playerCoinsDict = new();
+    private Dictionary<ulong, HashSet<string>> ownedAvatarsByClient = new();
+    private Dictionary<string, Texture2D> avatarTextures = new();
+    private Dictionary<string, List<StoreItem>> pendingAvatarItems = new();
+    private Dictionary<string, List<ulong>> pendingPlayerAvatars = new();
+    private Dictionary<ulong, string> playerAvatars = new();
+
+    private List<AvatarData> availableAvatars = new();
     private FirebaseStorage storage;
     private bool isStoreInitialized = false;
-    private Dictionary<string, List<StoreItem>> pendingAvatarItems = new Dictionary<string, List<StoreItem>>();
-    private Dictionary<string, List<ulong>> pendingPlayerAvatars = new Dictionary<string, List<ulong>>();
-    
+
     private void Awake()
     {
         if (Instance == null) Instance = this;
-        else if (Instance != this) Destroy(gameObject);
+        else Destroy(gameObject);
+
         DontDestroyOnLoad(gameObject);
     }
-    
+
     private void Start()
     {
         if (closeStoreButton != null) closeStoreButton.onClick.AddListener(HideStore);
         storage = FirebaseStorage.DefaultInstance;
         if (storePanel != null) storePanel.SetActive(false);
-        LoadOwnedAvatars();
-        ResetCoinsToDefault();
-        ResetAllPlayerData();
+        ParseAvatarXml();
     }
-    
+
     public override void OnNetworkSpawn()
     {
         base.OnNetworkSpawn();
-        
-        if (IsServer)
-        {
-            playerCoins.Value = PlayerPrefs.GetInt("PlayerCoins", startingCoins);
-            UpdateCoinsDisplay();
-            InitializeAvatarStore();
-            string savedAvatarId = PlayerPrefs.GetString("CurrentAvatarId", "");
-            if (!string.IsNullOrEmpty(savedAvatarId))
-                currentAvatarId.Value = new NetworkString(savedAvatarId);
-        }
-        
-        currentAvatarId.OnValueChanged += OnAvatarChanged;
-        if (NetworkManager.Singleton != null)
-            NetworkManager.Singleton.OnClientConnectedCallback += OnClientConnected;
+        NetworkManager.Singleton.OnClientConnectedCallback += OnClientConnected;
     }
-    
+
     public override void OnNetworkDespawn()
     {
-        base.OnNetworkDespawn();
-        currentAvatarId.OnValueChanged -= OnAvatarChanged;
-        if (NetworkManager.Singleton != null)
-            NetworkManager.Singleton.OnClientConnectedCallback -= OnClientConnected;
+        NetworkManager.Singleton.OnClientConnectedCallback -= OnClientConnected;
     }
-    
-    private void InitializeAvatarStore()
-    {
-        if (isStoreInitialized) return;
-        ParseAvatarXml();
-        isStoreInitialized = true;
-    }
-    
-    public void ShowStore()
-    {
-        if (!isStoreInitialized) InitializeAvatarStore();
-        storePanel.SetActive(true);
-        PopulateStoreUI();
-    }
-    
-    public void HideStore() => storePanel.SetActive(false);
-    
+
     private void ParseAvatarXml()
     {
         availableAvatars.Clear();
         TextAsset xmlFile = Resources.Load<TextAsset>("Avatars");
         if (xmlFile == null) return;
-        
+
         XmlDocument xmlDoc = new XmlDocument();
         xmlDoc.LoadXml(xmlFile.text);
-        
         XmlNodeList avatarNodes = xmlDoc.SelectNodes("//avatar");
+
         foreach (XmlNode avatarNode in avatarNodes)
         {
-            string id = avatarNode.Attributes["id"]?.Value;
+            string id = avatarNode.Attributes["id"].Value;
             string name = avatarNode.SelectSingleNode("name")?.InnerText;
-            int price = int.Parse(avatarNode.SelectSingleNode("price")?.InnerText ?? "0");
+            int price = int.Parse(avatarNode.SelectSingleNode("price")?.InnerText);
             string imageUrl = avatarNode.SelectSingleNode("imageUrl")?.InnerText;
-            
-            if (!string.IsNullOrEmpty(id) && !string.IsNullOrEmpty(name) && !string.IsNullOrEmpty(imageUrl))
-            {
-                availableAvatars.Add(new AvatarData
-                {
-                    Id = id,
-                    Name = name,
-                    Price = price,
-                    ImageFileName = imageUrl
-                });
-            }
+
+            if (!string.IsNullOrEmpty(id))
+                availableAvatars.Add(new AvatarData { Id = id, Name = name, Price = price, ImageFileName = imageUrl });
         }
     }
-    
+
+    public void ShowStore() {
+        storePanel.SetActive(true);
+        PopulateStoreUI();
+    }
+
+    public void HideStore() => storePanel.SetActive(false);
+
     private void PopulateStoreUI()
     {
         foreach (Transform child in avatarContainer)
             Destroy(child.gameObject);
-        
-        UpdateCoinsDisplay();
-        
+
+        ulong clientId = NetworkManager.Singleton.LocalClientId;
+        int coins = playerCoinsDict.ContainsKey(clientId) ? playerCoinsDict[clientId] : 0;
+        playerCoinsText.text = $"Coins: {coins}";
+
         foreach (AvatarData avatar in availableAvatars)
         {
-            if (avatarContainer == null || avatarItemPrefab == null) continue;
-            
             GameObject itemGO = Instantiate(avatarItemPrefab, avatarContainer);
             StoreItem item = itemGO.GetComponent<StoreItem>();
-            
-            if (item != null)
-            {
-                bool isOwned = ownedAvatars.ContainsKey(avatar.Id) && ownedAvatars[avatar.Id];
-                item.Initialize(avatar, isOwned, OnAvatarPurchased, OnAvatarSelected);
-                
-                if (avatarTextures.ContainsKey(avatar.Id))
-                    item.SetImage(avatarTextures[avatar.Id]);
-                else
-                    StartCoroutine(DownloadAvatarImage(avatar.Id, avatar.ImageFileName, item));
-            }
+
+            bool isOwned = ownedAvatarsByClient.ContainsKey(clientId) && ownedAvatarsByClient[clientId].Contains(avatar.Id);
+            item.Initialize(avatar, isOwned, OnAvatarPurchaseRequest, OnAvatarSelected);
+
+            if (avatarTextures.TryGetValue(avatar.Id, out Texture2D tex))
+                item.SetImage(tex);
+            else
+                StartCoroutine(DownloadAvatarImage(avatar.Id, avatar.ImageFileName, item));
         }
     }
-    
+
+    private bool OnAvatarPurchaseRequest(string avatarId)
+    {
+        RequestAvatarPurchaseServerRpc(NetworkManager.Singleton.LocalClientId, avatarId);
+        return false; // Let the server handle confirmation
+    }
+
+    [ServerRpc(RequireOwnership = false)]
+    private void RequestAvatarPurchaseServerRpc(ulong clientId, string avatarId)
+    {
+        AvatarData avatar = availableAvatars.Find(a => a.Id == avatarId);
+        if (avatar == null || !playerCoinsDict.ContainsKey(clientId)) return;
+
+        if (!ownedAvatarsByClient.ContainsKey(clientId))
+            ownedAvatarsByClient[clientId] = new HashSet<string>();
+
+        if (ownedAvatarsByClient[clientId].Contains(avatarId)) return;
+        if (playerCoinsDict[clientId] < avatar.Price) return;
+
+        playerCoinsDict[clientId] -= avatar.Price;
+        ownedAvatarsByClient[clientId].Add(avatarId);
+        firebaseLogger?.LogDLCPurchase(avatarId);
+
+        UpdateCoinsClientRpc(clientId, playerCoinsDict[clientId]);
+        SyncOwnershipClientRpc(clientId, avatarId);
+    }
+
+    [ClientRpc]
+    private void UpdateCoinsClientRpc(ulong clientId, int coins)
+    {
+        if (NetworkManager.Singleton.LocalClientId != clientId) return;
+        if (!playerCoinsDict.ContainsKey(clientId))
+            playerCoinsDict[clientId] = coins;
+        else
+            playerCoinsDict[clientId] = coins;
+
+        playerCoinsText.text = $"Coins: {coins}";
+        PopulateStoreUI();
+    }
+
+    [ClientRpc]
+    private void SyncOwnershipClientRpc(ulong clientId, string avatarId)
+    {
+        if (!ownedAvatarsByClient.ContainsKey(clientId))
+            ownedAvatarsByClient[clientId] = new HashSet<string>();
+        ownedAvatarsByClient[clientId].Add(avatarId);
+        PopulateStoreUI();
+    }
+
+    private void OnAvatarSelected(string avatarId)
+    {
+        ulong clientId = NetworkManager.Singleton.LocalClientId;
+
+        if (!ownedAvatarsByClient.ContainsKey(clientId) || !ownedAvatarsByClient[clientId].Contains(avatarId))
+            return;
+
+        RequestAvatarChangeServerRpc(clientId, avatarId);
+    }
+
+    [ServerRpc(RequireOwnership = false)]
+    private void RequestAvatarChangeServerRpc(ulong clientId, string avatarId)
+    {
+        if (!ownedAvatarsByClient.ContainsKey(clientId) || !ownedAvatarsByClient[clientId].Contains(avatarId)) return;
+
+        playerAvatars[clientId] = avatarId;
+        NotifyAvatarChangeClientRpc(clientId, avatarId);
+    }
+
+    private void OnAvatarChanged(NetworkString previous, NetworkString current)
+    {
+        if (string.IsNullOrEmpty(current.Value)) return;
+        UpdateAvatarDisplay(current.Value);
+    }
+
+    private void UpdateAvatarDisplay(string avatarId)
+    {
+        if (!avatarTextures.TryGetValue(avatarId, out Texture2D texture)) return;
+        Sprite sprite = Sprite.Create(texture, new Rect(0, 0, texture.width, texture.height), new Vector2(0.5f, 0.5f));
+        bool isWhitePlayer = TurnManager.Instance.IsWhitePlayer(NetworkManager.Singleton.LocalClientId);
+
+        if (isWhitePlayer) whitePlayerAvatarDisplay.sprite = sprite;
+        else blackPlayerAvatarDisplay.sprite = sprite;
+    }
+
     private IEnumerator DownloadAvatarImage(string avatarId, string imageName, StoreItem item = null)
     {
         if (string.IsNullOrEmpty(imageName)) yield break;
-            
+
         if (!pendingAvatarItems.ContainsKey(avatarId))
         {
             pendingAvatarItems[avatarId] = new List<StoreItem>();
             StorageReference imageRef = storage.GetReference($"Avatars/{imageName}");
             var downloadTask = imageRef.GetBytesAsync(1024 * 1024);
-            
+
             if (item != null) pendingAvatarItems[avatarId].Add(item);
-            
             while (!downloadTask.IsCompleted) yield return null;
-            
-            if (downloadTask.IsFaulted || downloadTask.IsCanceled)
-            {
-                pendingAvatarItems.Remove(avatarId);
-                yield break;
-            }
-            
+
             Texture2D texture = new Texture2D(2, 2);
             texture.LoadImage(downloadTask.Result);
             avatarTextures[avatarId] = texture;
-            
-            foreach (var pendingItem in pendingAvatarItems[avatarId])
-                if (pendingItem != null) pendingItem.SetImage(texture);
-            
-            if (pendingPlayerAvatars.ContainsKey(avatarId))
-            {
-                foreach (var clientId in pendingPlayerAvatars[avatarId])
-                    UpdatePlayerAvatarDisplay(clientId, avatarId);
-                pendingPlayerAvatars.Remove(avatarId);
-            }
-            
-            if (currentAvatarId.Value.Value == avatarId)
-                UpdateAvatarDisplay(avatarId);
-            
+
+            foreach (var pending in pendingAvatarItems[avatarId])
+                pending?.SetImage(texture);
+
             pendingAvatarItems.Remove(avatarId);
         }
         else if (item != null)
+        {
             pendingAvatarItems[avatarId].Add(item);
+        }
     }
-    
-    private bool OnAvatarPurchased(string avatarId)
-    {
-        FindObjectOfType<FirebaseGameLogger>()?.LogDLCPurchase(avatarId);
 
-        if (!IsOwner) return false;
-            
-        AvatarData avatar = availableAvatars.Find(a => a.Id == avatarId);
-        if (avatar == null) return false;
-        if (ownedAvatars.ContainsKey(avatarId) && ownedAvatars[avatarId]) return true;
-        if (playerCoins.Value < avatar.Price) return false;
-            
-        playerCoins.Value -= avatar.Price;
-        ownedAvatars[avatarId] = true;
-        
-        FirebaseGameLogger logger = FindObjectOfType<FirebaseGameLogger>();
-        if (logger != null)
-        {
-            logger.LogDLCPurchase(avatarId);
-        }
-        
-        SaveOwnedAvatars();
-        PlayerPrefs.SetInt("PlayerCoins", playerCoins.Value);
-        PlayerPrefs.Save();
-        
-        UpdateCoinsDisplay();
-        return true;
-    }
-    
-    private void OnAvatarSelected(string avatarId)
-    {
-        if (!IsOwner) return;
-        if (!ownedAvatars.ContainsKey(avatarId) || !ownedAvatars[avatarId]) return;
-            
-        currentAvatarId.Value = new NetworkString(avatarId);
-        PlayerPrefs.SetString("CurrentAvatarId", avatarId);
-        PlayerPrefs.Save();
-    }
-    
-    private void OnAvatarChanged(NetworkString previous, NetworkString current)
-    {
-        if (string.IsNullOrEmpty(current.Value)) return;
-            
-        ulong clientId = NetworkManager.Singleton.LocalClientId;
-        playerAvatars[clientId] = current.Value;
-        
-        UpdateAvatarDisplay(current.Value);
-        NotifyAvatarChangeServerRpc(clientId, current.Value);
-    }
-    
-    private void UpdateAvatarDisplay(string avatarId)
-    {
-        if (string.IsNullOrEmpty(avatarId)) return;
-            
-        if (!avatarTextures.TryGetValue(avatarId, out Texture2D texture) || texture == null)
-        {
-            AvatarData avatar = availableAvatars.Find(a => a.Id == avatarId);
-            if (avatar != null) StartCoroutine(DownloadAvatarImage(avatarId, avatar.ImageFileName));
-            return;
-        }
-            
-        Sprite sprite = Sprite.Create(texture, new Rect(0, 0, texture.width, texture.height), new Vector2(0.5f, 0.5f));
-        bool isWhitePlayer = IsWhitePlayer(NetworkManager.Singleton.LocalClientId);
-        
-        if (isWhitePlayer && whitePlayerAvatarDisplay != null)
-            whitePlayerAvatarDisplay.sprite = sprite;
-        else if (!isWhitePlayer && blackPlayerAvatarDisplay != null)
-            blackPlayerAvatarDisplay.sprite = sprite;
-    }
-    
-    private void UpdateCoinsDisplay()
-    {
-        if (playerCoinsText != null) playerCoinsText.text = $"Coins: {playerCoins.Value}";
-    }
-    
-    private void LoadOwnedAvatars()
-    {
-        ownedAvatars.Clear();
-        string ownedAvatarsString = PlayerPrefs.GetString("OwnedAvatars", "");
-        if (!string.IsNullOrEmpty(ownedAvatarsString))
-        {
-            foreach (string id in ownedAvatarsString.Split(','))
-                if (!string.IsNullOrEmpty(id)) ownedAvatars[id] = true;
-        }
-    }
-    
-    private void SaveOwnedAvatars()
-    {
-        string ownedAvatarsString = "";
-        foreach (var kvp in ownedAvatars)
-            if (kvp.Value) ownedAvatarsString += kvp.Key + ",";
-        
-        PlayerPrefs.SetString("OwnedAvatars", ownedAvatarsString);
-        PlayerPrefs.Save();
-    }
-    
-    public Texture2D GetAvatarTexture(string avatarId) => 
-        avatarTextures.ContainsKey(avatarId) ? avatarTextures[avatarId] : null;
-    
-    public string GetPlayerAvatarId(ulong clientId) => 
-        playerAvatars.ContainsKey(clientId) ? playerAvatars[clientId] : "";
-    
-    private bool IsWhitePlayer(ulong clientId) => clientId == NetworkManager.ServerClientId;
-    
     private void OnClientConnected(ulong clientId)
     {
-        if (IsServer)
-            foreach (var playerAvatar in playerAvatars)
-                NotifyAvatarChangeClientRpc(playerAvatar.Key, playerAvatar.Value);
+        if (!playerCoinsDict.ContainsKey(clientId))
+        {
+            playerCoinsDict[clientId] = startingCoins;
+            ownedAvatarsByClient[clientId] = new HashSet<string>();
+        }
+
+        NotifyAvatarChangeClientRpc(clientId, availableAvatars[0].Id);
     }
 
-    [ServerRpc(RequireOwnership = false)]
-    private void NotifyAvatarChangeServerRpc(ulong clientId, string avatarId)
-    {
-        if (IsServer)
-        {
-            playerAvatars[clientId] = avatarId;
-            NotifyAvatarChangeClientRpc(clientId, avatarId);
-        }
-    }
-    
     [ClientRpc]
     private void NotifyAvatarChangeClientRpc(ulong clientId, string avatarId)
     {
-        if (!IsServer)
+        playerAvatars[clientId] = avatarId;
+
+        if (clientId == NetworkManager.Singleton.LocalClientId)
         {
-            playerAvatars[clientId] = avatarId;
-            if (clientId != NetworkManager.Singleton.LocalClientId)
-                UpdatePlayerAvatarDisplay(clientId, avatarId);
-        }
-    }
-    
-    private void UpdatePlayerAvatarDisplay(ulong clientId, string avatarId)
-    {
-        bool isWhitePlayer = IsWhitePlayer(clientId);
-        
-        if (avatarTextures.TryGetValue(avatarId, out Texture2D texture) && texture != null)
-        {
-            Sprite sprite = Sprite.Create(texture, new Rect(0, 0, texture.width, texture.height), new Vector2(0.5f, 0.5f));
-            
-            if (isWhitePlayer && whitePlayerAvatarDisplay != null)
-                whitePlayerAvatarDisplay.sprite = sprite;
-            else if (!isWhitePlayer && blackPlayerAvatarDisplay != null)
-                blackPlayerAvatarDisplay.sprite = sprite;
+            UpdateAvatarDisplay(avatarId);
         }
         else
         {
-            AvatarData avatar = availableAvatars.Find(a => a.Id == avatarId);
-            if (avatar != null)
+            bool isWhite = TurnManager.Instance.IsWhitePlayer(clientId);
+            if (avatarTextures.TryGetValue(avatarId, out Texture2D tex))
             {
-                if (!pendingPlayerAvatars.ContainsKey(avatarId))
-                    pendingPlayerAvatars[avatarId] = new List<ulong>();
-                
-                pendingPlayerAvatars[avatarId].Add(clientId);
-                StartCoroutine(DownloadAvatarImage(avatarId, avatar.ImageFileName));
+                Sprite sprite = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), new Vector2(0.5f, 0.5f));
+                if (isWhite && whitePlayerAvatarDisplay != null)
+                    whitePlayerAvatarDisplay.sprite = sprite;
+                else if (!isWhite && blackPlayerAvatarDisplay != null)
+                    blackPlayerAvatarDisplay.sprite = sprite;
             }
         }
     }
-    
-    public void ResetCoinsToDefault()
-    {
-        if (IsOwner)
-        {
-            playerCoins.Value = startingCoins;
-        }
-    
-        PlayerPrefs.SetInt("PlayerCoins", startingCoins);
-        PlayerPrefs.Save();
-    
-        UpdateCoinsDisplay();
-    }
-    
-    
-    public void ResetAllPlayerData()
-    {
-        if (IsOwner)
-        {
-            playerCoins.Value = startingCoins;
-        }
-    
-        PlayerPrefs.SetInt("PlayerCoins", startingCoins);
-    
-        ownedAvatars.Clear();
-    
-        if (availableAvatars.Count > 0)
-        {
-            string defaultAvatarId = availableAvatars[0].Id;
-            ownedAvatars[defaultAvatarId] = true;
-        }
-    
-        SaveOwnedAvatars();
-    
-        if (IsOwner && availableAvatars.Count > 0)
-        {
-            string defaultAvatarId = availableAvatars[0].Id;
-            currentAvatarId.Value = new NetworkString(defaultAvatarId);
-            PlayerPrefs.SetString("CurrentAvatarId", defaultAvatarId);
-        }
-        else
-        {
-            PlayerPrefs.SetString("CurrentAvatarId", "");
-        }
-    
-        PlayerPrefs.Save();
-    
-        UpdateCoinsDisplay();
-    
-        if (storePanel.activeSelf)
-        {
-            PopulateStoreUI();
-        }
-    }
+
+    public string GetPlayerAvatarId(ulong clientId) =>
+        playerAvatars.ContainsKey(clientId) ? playerAvatars[clientId] : "";
+
+    public Texture2D GetAvatarTexture(string avatarId) =>
+        avatarTextures.ContainsKey(avatarId) ? avatarTextures[avatarId] : null;
+
+    public bool IsWhitePlayer(ulong clientId) => clientId == NetworkManager.ServerClientId;
 }
 
 [System.Serializable]
@@ -422,9 +283,7 @@ public struct NetworkString : INetworkSerializable
 {
     private string value;
     public string Value => value;
-    
     public NetworkString(string value) => this.value = value;
-    
     public void NetworkSerialize<T>(BufferSerializer<T> serializer) where T : IReaderWriter
     {
         serializer.SerializeValue(ref value);

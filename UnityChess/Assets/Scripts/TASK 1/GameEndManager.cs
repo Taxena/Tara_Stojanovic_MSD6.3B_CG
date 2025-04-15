@@ -37,6 +37,7 @@ public class GameEndManager : NetworkBehaviour
         boardManager = BoardManager.Instance;
         
         if (resignButton != null) resignButton.onClick.AddListener(ResignGame);
+        /*if (resignButton != null) resignButton.onClick.AddListener(() => ForceCheckmate(Side.White));*/
         GameManager.MoveExecutedEvent += CheckForGameEnd;
         GameManager.GameResetToHalfMoveEvent += ResetGameEndState;
         GameManager.NewGameStartedEvent += OnNewGameStarted;
