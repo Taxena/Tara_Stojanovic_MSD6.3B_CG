@@ -135,4 +135,46 @@ public class BoardSynchroniser : NetworkBehaviour
             serializer.SerializeValue(ref value);
         }
     }
+    
+    public void SyncLoadedGameState(string fen)
+    {
+        if (!IsServer) return;
+
+        boardState.Value = new NetworkString(fen);
+    }
+    
+    [ServerRpc(RequireOwnership = false)]
+    public void SaveGameToFirestoreServerRpc()
+    {
+        FirebaseGameLogger firebase = FindObjectOfType<FirebaseGameLogger>();
+        if (firebase == null) return;
+
+        string fen = GameManager.Instance.SerializeGame();
+        if (!string.IsNullOrEmpty(fen))
+        {
+            firebase.SaveGameState(fen);
+            Debug.Log("Game state saved to Firestore");
+        }
+    }
+    
+    [ServerRpc(RequireOwnership = false)]
+    public void LoadGameFromFirestoreServerRpc()
+    {
+        StartCoroutine(LoadGameFromFirestoreRoutine());
+    }
+    
+    private IEnumerator LoadGameFromFirestoreRoutine()
+    {
+        FirebaseGameLogger firebase = FindObjectOfType<FirebaseGameLogger>();
+        if (firebase == null) yield break;
+
+        var task = firebase.LoadGameState();
+        while (!task.IsCompleted) yield return null;
+
+        if (task.IsFaulted || task.Result == null) yield break;
+
+        string fen = task.Result;
+        GameManager.Instance.LoadGame(fen);
+        SyncLoadedGameState(fen);
+    }
 }

@@ -37,6 +37,8 @@ public class UIManager : MonoBehaviourSingleton<UIManager> {
 	// Darkening factor for alternate move history row colours (range -0.25 to 0.25).
 	[SerializeField, Range(-0.25f, 0.25f)] private float moveHistoryAlternateColorDarkenAmount = 0f;
 	
+	[SerializeField] private FirebaseGameLogger firebaseLogger;
+	
 	// Timeline to keep track of the full move UI elements in sequence.
 	private Timeline<FullMoveUI> moveUITimeline;
 	// Computed button colour based on the background colour and darkening factor.
@@ -301,6 +303,25 @@ public class UIManager : MonoBehaviourSingleton<UIManager> {
 	{
 		resultText.text = message;
 		resultText.gameObject.SetActive(true);
+	}
+	
+	public void SaveGameToFirebase()
+	{
+		BoardSynchroniser sync = FindObjectOfType<BoardSynchroniser>();
+		if (sync == null) return;
+
+		sync.SaveGameToFirestoreServerRpc();
+
+		UIManager.Instance.ShowGameEndMessage("Game saved to Firestore!");
+	}
+	
+	public void LoadFromFirebase()
+	{
+		BoardSynchroniser sync = FindObjectOfType<BoardSynchroniser>();
+		if (sync == null) return;
+
+		sync.LoadGameFromFirestoreServerRpc();
+		UIManager.Instance.ShowGameEndMessage("Loading saved game from Firestore...");
 	}
 }
 

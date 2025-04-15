@@ -17,6 +17,8 @@ public class GameManager : MonoBehaviourSingleton<GameManager> {
 	public static event Action GameResetToHalfMoveEvent;
 	public static event Action MoveExecutedEvent;
 	
+	[SerializeField] private FirebaseGameLogger firebaseLogger;
+	
 	/// <summary>
 	/// Gets the current board state from the game.
 	/// </summary>
@@ -133,6 +135,10 @@ public class GameManager : MonoBehaviourSingleton<GameManager> {
 	/// </summary>
 	public async void StartNewGame() {
 		game = new Game();
+    
+		if (firebaseLogger != null && firebaseLogger.isActiveAndEnabled)
+			firebaseLogger.LogMatchStart();
+
 		NewGameStartedEvent?.Invoke();
 	}
 
@@ -140,7 +146,22 @@ public class GameManager : MonoBehaviourSingleton<GameManager> {
 	/// Serialises the current game state using the selected serialization format.
 	/// </summary>
 	/// <returns>A string representing the serialised game state.</returns>
-	public string SerializeGame() {
+	/*private int saveCounter = 0;*/
+
+	public string SerializeGame()
+	{
+		/*string fen = serializersByType[selectedSerializationType].Serialize(game);
+
+		saveCounter++;
+
+		if (saveCounter % 5 == 0 && firebaseLogger != null)
+		{
+			firebaseLogger.SaveGameState(fen);
+			Debug.Log("Game state saved (every 5 moves)");
+		}
+
+		return fen;*/
+		
 		return serializersByType.TryGetValue(selectedSerializationType, out IGameSerializer serializer)
 			? serializer?.Serialize(game)
 			: null;
@@ -370,4 +391,9 @@ public class GameManager : MonoBehaviourSingleton<GameManager> {
 
 		return TryExecuteMove(move);
 	}
+	
+	private void OnGameEnded() {
+		firebaseLogger?.LogMatchEnd("checkmate or stalemate");
+	}
+	
 }

@@ -20,6 +20,7 @@ public class DLCStoreManager : NetworkBehaviour
     [SerializeField] private Image whitePlayerAvatarDisplay;
     [SerializeField] private Image blackPlayerAvatarDisplay;
     [SerializeField] private int startingCoins = 1000;
+    [SerializeField] private FirebaseGameLogger firebaseLogger;
     
     private NetworkVariable<int> playerCoins = new NetworkVariable<int>(0, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
     private NetworkVariable<NetworkString> currentAvatarId = new NetworkVariable<NetworkString>(new NetworkString(""), 
@@ -48,8 +49,8 @@ public class DLCStoreManager : NetworkBehaviour
         storage = FirebaseStorage.DefaultInstance;
         if (storePanel != null) storePanel.SetActive(false);
         LoadOwnedAvatars();
-        /*ResetCoinsToDefault();
-        ResetAllPlayerData();*/
+        ResetCoinsToDefault();
+        ResetAllPlayerData();
     }
     
     public override void OnNetworkSpawn()
@@ -197,6 +198,8 @@ public class DLCStoreManager : NetworkBehaviour
     
     private bool OnAvatarPurchased(string avatarId)
     {
+        FindObjectOfType<FirebaseGameLogger>()?.LogDLCPurchase(avatarId);
+
         if (!IsOwner) return false;
             
         AvatarData avatar = availableAvatars.Find(a => a.Id == avatarId);
@@ -206,6 +209,12 @@ public class DLCStoreManager : NetworkBehaviour
             
         playerCoins.Value -= avatar.Price;
         ownedAvatars[avatarId] = true;
+        
+        FirebaseGameLogger logger = FindObjectOfType<FirebaseGameLogger>();
+        if (logger != null)
+        {
+            logger.LogDLCPurchase(avatarId);
+        }
         
         SaveOwnedAvatars();
         PlayerPrefs.SetInt("PlayerCoins", playerCoins.Value);
