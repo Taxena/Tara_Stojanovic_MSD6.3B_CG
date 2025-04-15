@@ -21,9 +21,9 @@ public class DLCStoreManager : NetworkBehaviour
     [SerializeField] private Image blackPlayerAvatarDisplay;
     [SerializeField] private int startingCoins = 1000;
     
-    private NetworkVariable<int> playerCoins = new NetworkVariable<int>(0, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
+    private NetworkVariable<int> playerCoins = new NetworkVariable<int>(0, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
     private NetworkVariable<NetworkString> currentAvatarId = new NetworkVariable<NetworkString>(new NetworkString(""), 
-        NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
+        NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
     
     private List<AvatarData> availableAvatars = new List<AvatarData>();
     private Dictionary<string, bool> ownedAvatars = new Dictionary<string, bool>();
@@ -56,7 +56,7 @@ public class DLCStoreManager : NetworkBehaviour
     {
         base.OnNetworkSpawn();
         
-        if (IsOwner)
+        if (IsServer)
         {
             playerCoins.Value = PlayerPrefs.GetInt("PlayerCoins", startingCoins);
             UpdateCoinsDisplay();

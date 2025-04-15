@@ -3,12 +3,15 @@ using System.Collections.Generic;
 using UnityEngine;
 using Unity.Netcode;
 using UnityChess;
-using UnityEngine;
 using System;
+using TMPro;
 
 public class TurnManager : NetworkBehaviour
 {
     public static TurnManager Instance { get; private set; }
+
+    [SerializeField]
+    private TMP_Text playerSideText;
 
     private NetworkVariable<int> currentTurn = new NetworkVariable<int>(0, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
     public static event Action<Side> OnTurnChanged;
@@ -18,6 +21,9 @@ public class TurnManager : NetworkBehaviour
     private GameManager gameManager;
     private BoardManager boardManager;
     private Side localPlayerSide = Side.None;
+    
+    public bool IsWhitePlayer(ulong clientId) => whitePlayerId.Value == clientId;
+    public bool IsBlackPlayer(ulong clientId) => blackPlayerId.Value == clientId;
 
     public bool IsLocalPlayerTurn => GetCurrentTurnSide() == localPlayerSide;
     public Side GetCurrentTurnSide() => currentTurn.Value % 2 == 0 ? Side.White : Side.Black;
@@ -59,7 +65,8 @@ public class TurnManager : NetworkBehaviour
         {
             whitePlayerId.Value = NetworkManager.ServerClientId;
             localPlayerSide = Side.White;
-            currentTurn.Value = 0;
+            if (playerSideText != null)
+                playerSideText.text = "Playing as White";
             
             foreach (ulong clientId in NetworkManager.Singleton.ConnectedClientsIds)
             {
@@ -73,6 +80,8 @@ public class TurnManager : NetworkBehaviour
         else
         {
             localPlayerSide = Side.Black;
+            if (playerSideText != null)
+                playerSideText.text = "Playing as Black";
             RequestBlackPlayerAssignmentServerRpc(NetworkManager.Singleton.LocalClientId);
         }
 
@@ -190,6 +199,8 @@ public class TurnManager : NetworkBehaviour
         if (NetworkManager.Singleton.LocalClientId == targetClientId)
         {
             localPlayerSide = Side.Black;
+            if (playerSideText != null)
+                playerSideText.text = "Playing as Black";
             OnTurnChanged?.Invoke(GetCurrentTurnSide());
             UpdatePieceInteractivity();
         }
