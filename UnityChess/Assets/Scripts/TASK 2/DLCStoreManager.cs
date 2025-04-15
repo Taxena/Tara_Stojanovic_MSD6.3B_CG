@@ -63,6 +63,7 @@ public class DLCStoreManager : NetworkBehaviour
         NetworkManager.Singleton.OnClientConnectedCallback -= OnClientConnected;
     }
 
+    // Loads avatar data from an XML file into the store
     private void ParseAvatarXml()
     {
         availableAvatars.Clear();
@@ -85,13 +86,16 @@ public class DLCStoreManager : NetworkBehaviour
         }
     }
 
+    // Displays the DLC store panel and populates it
     public void ShowStore() {
         storePanel.SetActive(true);
         PopulateStoreUI();
     }
 
+    // Hides the DLC store panel
     public void HideStore() => storePanel.SetActive(false);
 
+    // Creates UI elements for all avatars
     private void PopulateStoreUI()
     {
         foreach (Transform child in avatarContainer)
@@ -116,12 +120,14 @@ public class DLCStoreManager : NetworkBehaviour
         }
     }
 
+    // Called when a player tries to buy an avatar
     private bool OnAvatarPurchaseRequest(string avatarId)
     {
         RequestAvatarPurchaseServerRpc(NetworkManager.Singleton.LocalClientId, avatarId);
-        return false; // Let the server handle confirmation
+        return false;
     }
 
+    // Checks purchase, deducts coins, adds avatar to owned list, and syncs
     [ServerRpc(RequireOwnership = false)]
     private void RequestAvatarPurchaseServerRpc(ulong clientId, string avatarId)
     {
@@ -142,6 +148,7 @@ public class DLCStoreManager : NetworkBehaviour
         SyncOwnershipClientRpc(clientId, avatarId);
     }
 
+    // Updates the coins for the player
     [ClientRpc]
     private void UpdateCoinsClientRpc(ulong clientId, int coins)
     {
@@ -155,6 +162,7 @@ public class DLCStoreManager : NetworkBehaviour
         PopulateStoreUI();
     }
 
+    // Updates the client's owned avatar list and refreshes UI
     [ClientRpc]
     private void SyncOwnershipClientRpc(ulong clientId, string avatarId)
     {
@@ -164,6 +172,7 @@ public class DLCStoreManager : NetworkBehaviour
         PopulateStoreUI();
     }
 
+    // Called when a player selects an avatar
     private void OnAvatarSelected(string avatarId)
     {
         ulong clientId = NetworkManager.Singleton.LocalClientId;
@@ -174,6 +183,7 @@ public class DLCStoreManager : NetworkBehaviour
         RequestAvatarChangeServerRpc(clientId, avatarId);
     }
 
+    // Sets the selected avatar as active and syncs it to all clients
     [ServerRpc(RequireOwnership = false)]
     private void RequestAvatarChangeServerRpc(ulong clientId, string avatarId)
     {
@@ -183,12 +193,14 @@ public class DLCStoreManager : NetworkBehaviour
         NotifyAvatarChangeClientRpc(clientId, avatarId);
     }
 
+    // Updates avatar display if the avatar value changes
     private void OnAvatarChanged(NetworkString previous, NetworkString current)
     {
         if (string.IsNullOrEmpty(current.Value)) return;
         UpdateAvatarDisplay(current.Value);
     }
 
+    // Applies avatar texture to the white or black player slot
     private void UpdateAvatarDisplay(string avatarId)
     {
         if (!avatarTextures.TryGetValue(avatarId, out Texture2D texture)) return;
@@ -199,6 +211,7 @@ public class DLCStoreManager : NetworkBehaviour
         else blackPlayerAvatarDisplay.sprite = sprite;
     }
 
+    // Downloads avatar image from Firebase and assigns it to UI
     private IEnumerator DownloadAvatarImage(string avatarId, string imageName, StoreItem item = null)
     {
         if (string.IsNullOrEmpty(imageName)) yield break;
@@ -227,6 +240,7 @@ public class DLCStoreManager : NetworkBehaviour
         }
     }
 
+    // Initializes coins and avatar ownership for newly connected clients
     private void OnClientConnected(ulong clientId)
     {
         if (!playerCoinsDict.ContainsKey(clientId))
@@ -238,6 +252,7 @@ public class DLCStoreManager : NetworkBehaviour
         NotifyAvatarChangeClientRpc(clientId, availableAvatars[0].Id);
     }
 
+    // Updates avatar display for all clients based on selected avatar
     [ClientRpc]
     private void NotifyAvatarChangeClientRpc(ulong clientId, string avatarId)
     {
@@ -261,15 +276,19 @@ public class DLCStoreManager : NetworkBehaviour
         }
     }
 
+    // Returns the active avatar ID for the given client
     public string GetPlayerAvatarId(ulong clientId) =>
         playerAvatars.ContainsKey(clientId) ? playerAvatars[clientId] : "";
 
+    // Returns the texture of the avatar for the given ID
     public Texture2D GetAvatarTexture(string avatarId) =>
         avatarTextures.ContainsKey(avatarId) ? avatarTextures[avatarId] : null;
 
+    // Checks if the client is the white player (host)
     public bool IsWhitePlayer(ulong clientId) => clientId == NetworkManager.ServerClientId;
 }
 
+// Represents data for a single avatar in the DLC store
 [System.Serializable]
 public class AvatarData
 {

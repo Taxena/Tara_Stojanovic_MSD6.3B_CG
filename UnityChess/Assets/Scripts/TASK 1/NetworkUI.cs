@@ -44,6 +44,7 @@ public class NetworkUI : MonoBehaviour
         }
     }
 
+    // Attempts to join a session
     private void JoinGame()
     {
         if (currentConnectionState != ConnectionState.Disconnected)
@@ -75,6 +76,7 @@ public class NetworkUI : MonoBehaviour
         }
     }
 
+    // Rejoins a previous session
     private void RejoinGame()
     {
         if (currentConnectionState != ConnectionState.Disconnected)
@@ -104,6 +106,7 @@ public class NetworkUI : MonoBehaviour
         }
     }
 
+    // Hosts a new game session
     private void HostGame()
     {
         if (currentConnectionState != ConnectionState.Disconnected)
@@ -127,6 +130,7 @@ public class NetworkUI : MonoBehaviour
         }
     }
 
+    // Generates a random session code
     private string GenerateSessionCode()
     {
         const string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
@@ -139,6 +143,7 @@ public class NetworkUI : MonoBehaviour
         return new string(codeArray);
     }
 
+    // Leaves the current game session
     private void LeaveGame()
     {
         if (currentConnectionState == ConnectionState.Disconnected)
@@ -154,6 +159,7 @@ public class NetworkUI : MonoBehaviour
         SetConnectionState(ConnectionState.Disconnected);
     }
 
+    // Checks for unexpected disconnect
     private void CheckTransportState()
     {
         if (NetworkManager.Singleton != null && !NetworkManager.Singleton.IsConnectedClient && currentConnectionState == ConnectionState.Connected)
@@ -163,6 +169,7 @@ public class NetworkUI : MonoBehaviour
         }
     }
 
+    // Handles client connection and disconnection events
     private void OnClientConnected(ulong clientId)
     {
         if (clientId == NetworkManager.Singleton.LocalClientId || NetworkManager.Singleton.IsHost)
@@ -178,12 +185,14 @@ public class NetworkUI : MonoBehaviour
         }
     }
 
+    // Updates state and UI
     private void SetConnectionState(ConnectionState state)
     {
         currentConnectionState = state;
         UpdateUIBasedOnConnectionState();
     }
 
+    // Enables/disables buttons based on state
     private void UpdateUIBasedOnConnectionState()
     {
         switch (currentConnectionState)
@@ -223,6 +232,7 @@ public class NetworkUI : MonoBehaviour
         }
     }
 
+    // Displays error messages
     private void ShowErrorMessage(string message)
     {
         if (errorMessageCoroutine != null)
@@ -231,6 +241,7 @@ public class NetworkUI : MonoBehaviour
         errorMessageCoroutine = StartCoroutine(ShowErrorMessageCoroutine(message));
     }
 
+    // Shows and hides error after timeout
     private System.Collections.IEnumerator ShowErrorMessageCoroutine(string message)
     {
         errorMessageText.text = message;
@@ -240,6 +251,7 @@ public class NetworkUI : MonoBehaviour
         errorMessageCoroutine = null;
     }
     
+    // Opens the DLC store
     private void OnOpenStoreClicked()
     {
         if (DLCStoreManager.Instance != null)

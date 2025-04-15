@@ -89,6 +89,7 @@ public class TurnManager : NetworkBehaviour
         UpdatePieceInteractivity();
     }
 
+    // Updates interactivity when turn changes
     private void OnTurnValueChanged(int previous, int current)
     {
         Side currentSide = GetCurrentTurnSide();
@@ -96,6 +97,7 @@ public class TurnManager : NetworkBehaviour
         UpdatePieceInteractivity();
     }
 
+    // Enables interaction for current turn's pieces
     private void UpdatePieceInteractivity()
     {
         VisualPiece[] allPieces = FindObjectsOfType<VisualPiece>();
@@ -104,6 +106,7 @@ public class TurnManager : NetworkBehaviour
             piece.enabled = IsLocalPlayerTurn && piece.PieceColor == localPlayerSide;
     }
 
+    // Changes turn after a move
     private void OnMoveExecuted()
     {
         if (IsServer)
@@ -117,6 +120,7 @@ public class TurnManager : NetworkBehaviour
         UpdatePieceInteractivity();
     }
     
+    // Notifies the server of a move
     public void NotifyOfMove(Square startSquare, Square endSquare, Side pieceSide)
     {
         if (!IsServer)
@@ -127,6 +131,7 @@ public class TurnManager : NetworkBehaviour
         }
     }
     
+    // Verifies the client making the request and then broadcasts the move to all clients
     [ServerRpc(RequireOwnership = false)]
     private void MoveServerRpc(string startSquareStr, string endSquareStr, ServerRpcParams rpcParams = default)
     {
@@ -139,6 +144,7 @@ public class TurnManager : NetworkBehaviour
         BroadcastMoveClientRpc(startSquareStr, endSquareStr);
     }
     
+    // Sends the move to all clients
     [ClientRpc]
     private void BroadcastMoveClientRpc(string startSquareStr, string endSquareStr)
     {
@@ -149,6 +155,7 @@ public class TurnManager : NetworkBehaviour
             SimulateMove(startSquare, endSquare);
     }
     
+    // Simulates a piece move visually if the server doesn't like it
     private void SimulateMove(Square startSquare, Square endSquare)
     {
         GameObject pieceGO = boardManager.GetPieceGOAtPosition(startSquare);
@@ -181,6 +188,7 @@ public class TurnManager : NetworkBehaviour
         }
     }
     
+    // Assigns player ID and syncs game state
     public void OnClientConnected(ulong clientId)
     {
         if (IsServer && clientId != NetworkManager.ServerClientId)
@@ -193,6 +201,7 @@ public class TurnManager : NetworkBehaviour
         }
     }
     
+    // Updates client color and turn
     [ClientRpc]
     private void SendGameStateToClientClientRpc(ulong targetClientId)
     {
@@ -205,7 +214,8 @@ public class TurnManager : NetworkBehaviour
             UpdatePieceInteractivity();
         }
     }
-
+    
+    // Requests black side assignment
     [ServerRpc(RequireOwnership = false)]
     private void RequestBlackPlayerAssignmentServerRpc(ulong clientId)
     {

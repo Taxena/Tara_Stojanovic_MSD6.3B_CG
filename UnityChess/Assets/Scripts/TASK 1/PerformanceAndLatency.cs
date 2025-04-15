@@ -17,6 +17,7 @@ public class PerformanceAndLatency : NetworkBehaviour
         StartCoroutine(PingRoutine());
     }
     
+    // Periodically pings all clients
     private IEnumerator PingRoutine()
     {
         yield return new WaitForSeconds(1.0f);
@@ -39,6 +40,7 @@ public class PerformanceAndLatency : NetworkBehaviour
         }
     }
     
+    // Tells client to ping back
     [ClientRpc]
     private void PingClientRpc(ulong clientId)
     {
@@ -46,6 +48,7 @@ public class PerformanceAndLatency : NetworkBehaviour
             PingServerRpc(NetworkManager.LocalClientId);
     }
     
+    // Handles ping response and logs time
     [ServerRpc(RequireOwnership = false)]
     private void PingServerRpc(ulong clientId, ServerRpcParams serverRpcParams = default)
     {
@@ -60,6 +63,7 @@ public class PerformanceAndLatency : NetworkBehaviour
         }
     }
     
+    // Logs ping on client
     [ClientRpc]
     private void NotifyClientPingClientRpc(float pingMs, ulong targetClientId)
     {
@@ -67,6 +71,7 @@ public class PerformanceAndLatency : NetworkBehaviour
             Debug.Log($"My ping: {pingMs:F2} ms");
     }
     
+    // Logs all clients' ping to console
     private void LogPingMetrics()
     {
         if (clientPings.Count == 0)

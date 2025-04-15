@@ -25,6 +25,7 @@ public class PieceController : MonoBehaviour
         StopAllCoroutines();
     }
     
+    // Detects if piece was moved and notifies network
     private IEnumerator MonitorPieceMovement()
     {
         VisualPiece piece = visualPiece;
@@ -50,6 +51,7 @@ public class PieceController : MonoBehaviour
         }
     }
     
+    // Enables or disables pieces based on turn
     private void OnTurnChanged(Side currentTurnSide)
     {
         if (TurnManager.Instance != null && visualPiece != null)
@@ -59,6 +61,7 @@ public class PieceController : MonoBehaviour
         }
     }
     
+    // Resets possition of move not possible
     private void NotifyNetworkOfMove(Square startSquare, Square endSquare)
     {
         if (TurnManager.Instance != null && TurnManager.Instance.IsLocalPlayerTurn)

@@ -44,12 +44,14 @@ public class BoardSynchroniser : NetworkBehaviour
         boardState.OnValueChanged -= OnBoardStateChanged;
     }
     
+    // Syncs board after a move
     private void OnMoveExecuted()
     {
         if (IsServer)
             SyncBoardState();
     }
     
+    // Starts coroutine to update board
     private void SyncBoardState()
     {
         if (!IsServer) return;
@@ -62,6 +64,7 @@ public class BoardSynchroniser : NetworkBehaviour
         boardState.Value = new NetworkString(gameManager.SerializeGame());
     }
     
+    // Loads board and updates pieces
     private void OnBoardStateChanged(NetworkString previousValue, NetworkString newValue)
     {
         if (string.IsNullOrEmpty(newValue.Value)) return;
@@ -71,6 +74,7 @@ public class BoardSynchroniser : NetworkBehaviour
         UpdateVisualPieces(currentBoard, gameManager.CurrentBoard);
     }
     
+    // Updates visual pieces on the board
     private void UpdateVisualPieces(Board oldBoard, Board newBoard)
     {
         for (int file = 1; file <= 8; file++)
@@ -102,6 +106,7 @@ public class BoardSynchroniser : NetworkBehaviour
             NotifyClientsAboutMoveClientRpc(startSquareStr, endSquareStr);
     }
     
+    // Updates piece movement on clients
     [ClientRpc]
     private void NotifyClientsAboutMoveClientRpc(string startSquareStr, string endSquareStr)
     {
@@ -136,6 +141,7 @@ public class BoardSynchroniser : NetworkBehaviour
         }
     }
     
+    // Syncs loaded game
     public void SyncLoadedGameState(string fen)
     {
         if (!IsServer) return;
@@ -143,6 +149,7 @@ public class BoardSynchroniser : NetworkBehaviour
         boardState.Value = new NetworkString(fen);
     }
     
+    // Saves game state to Firestore
     [ServerRpc(RequireOwnership = false)]
     public void SaveGameToFirestoreServerRpc()
     {
@@ -157,12 +164,14 @@ public class BoardSynchroniser : NetworkBehaviour
         }
     }
     
+    // Loads game state from Firestore
     [ServerRpc(RequireOwnership = false)]
     public void LoadGameFromFirestoreServerRpc()
     {
         StartCoroutine(LoadGameFromFirestoreRoutine());
     }
     
+    // Coroutine to load game from Firestore
     private IEnumerator LoadGameFromFirestoreRoutine()
     {
         FirebaseGameLogger firebase = FindObjectOfType<FirebaseGameLogger>();

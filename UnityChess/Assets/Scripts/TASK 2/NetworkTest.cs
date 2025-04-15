@@ -3,6 +3,7 @@ using Unity.Netcode;
 
 public class NetworkTest : NetworkBehaviour
 {
+    // Just a debugging script
     public override void OnNetworkSpawn()
     {
         base.OnNetworkSpawn();

@@ -49,7 +49,7 @@ public class FirebaseGameLogger : MonoBehaviour
         }
     }
 
-
+    // Logs match start to Firebase Analytics and Firestore
     public void LogMatchStart()
     {
         if (db == null) return;
@@ -63,6 +63,7 @@ public class FirebaseGameLogger : MonoBehaviour
         });
     }
 
+    // Logs match result to Firebase Analytics and Firestore
     public void LogMatchEnd(string result)
     {
         if (db == null) return;
@@ -77,6 +78,7 @@ public class FirebaseGameLogger : MonoBehaviour
         });
     }
 
+    // Logs DLC avatar purchase to Firebase Analytics and Firestore
     public void LogDLCPurchase(string avatarId)
     {
         if (db == null) return;
@@ -93,6 +95,7 @@ public class FirebaseGameLogger : MonoBehaviour
         Debug.Log($"DLC purchase logged: {avatarId}");
     }
 
+    // Saves the current game state to Firestore
     public async Task SaveGameState(string fen)
     {
         if (db == null) return;
@@ -102,6 +105,7 @@ public class FirebaseGameLogger : MonoBehaviour
         Debug.Log("Game state saved to Firestore.");
     }
 
+    // Loads saved game state from Firestore, if available
     public async Task<string> LoadGameState()
     {
         if (db == null) return null;

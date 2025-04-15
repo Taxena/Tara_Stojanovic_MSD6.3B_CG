@@ -67,6 +67,7 @@ public class GameEndManager : NetworkBehaviour
         }
     }
 
+    // Checks for checkmate or stalemate
     private void CheckForGameEnd()
     {
         if (!IsServer || gameEndState.Value != GameEndState.None) return;
@@ -86,6 +87,7 @@ public class GameEndManager : NetworkBehaviour
         }
     }
 
+    // Updates UI and disables input on game end
     private void OnGameEndStateChanged(GameEndState previous, GameEndState current)
     {
         if (current == GameEndState.None) return;
@@ -103,6 +105,7 @@ public class GameEndManager : NetworkBehaviour
         if (resignButton != null) resignButton.interactable = false;
     }
 
+    // Returns game end message
     private string GetEndStateMessage(GameEndState state)
     {
         return state switch
@@ -117,6 +120,7 @@ public class GameEndManager : NetworkBehaviour
         };
     }
 
+    // Calls for resignation
     public void ResignGame()
     {
         if (!IsServer)
@@ -128,12 +132,14 @@ public class GameEndManager : NetworkBehaviour
         SetResignState(NetworkManager.Singleton.LocalClientId);
     }
 
+    // Server-side resignation
     [ServerRpc(RequireOwnership = false)]
     private void ResignGameServerRpc(ServerRpcParams rpcParams = default)
     {
         SetResignState(rpcParams.Receive.SenderClientId);
     }
     
+    // Sets resignation state based on player
     private void SetResignState(ulong clientId)
     {
         if (turnManager.IsWhitePlayer(clientId))
@@ -142,14 +148,17 @@ public class GameEndManager : NetworkBehaviour
             gameEndState.Value = GameEndState.BlackResigned;
     }
     
+    // Resets game end state when a new game starts
     private void OnNewGameStarted() => ResetGameEndState();
     
+    // Resets game end state and UI elements
     private void ResetGameEndState()
     {
         if (IsServer) gameEndState.Value = GameEndState.None;
         ResetUIElements();
     }
     
+    // UI reset and state sync on reconnect
     private void OnClientConnected(ulong clientId)
     {
         if (clientId == NetworkManager.Singleton.LocalClientId)
@@ -162,7 +171,8 @@ public class GameEndManager : NetworkBehaviour
         if (IsServer && clientId != NetworkManager.Singleton.LocalClientId)
             NotifyClientAboutGameStateClientRpc(clientId);
     }
-
+    
+    // Notifies client about game state
     [ClientRpc]
     private void NotifyClientAboutGameStateClientRpc(ulong targetClientId)
     {
@@ -170,6 +180,7 @@ public class GameEndManager : NetworkBehaviour
             ResetUIElements();
     }
     
+    // Manually forces a checkmate
     public void ForceCheckmate(Side winningSide)
     {
         if (!IsServer)
@@ -186,6 +197,7 @@ public class GameEndManager : NetworkBehaviour
         }
     }
     
+    // Manually forces a stalemate
     public void ForceStalemate()
     {
         if (!IsServer)
@@ -198,6 +210,7 @@ public class GameEndManager : NetworkBehaviour
             gameEndState.Value = GameEndState.DrawByStalemate;
     }
     
+    // Server-side checkmate force
     [ServerRpc(RequireOwnership = false)]
     private void ForceCheckmateServerRpc(bool isWhiteWinner)
     {
@@ -209,6 +222,7 @@ public class GameEndManager : NetworkBehaviour
         }
     }
     
+    // Server-side stalemate force
     [ServerRpc(RequireOwnership = false)]
     private void ForceStalemateServerRpc()
     {
@@ -216,6 +230,7 @@ public class GameEndManager : NetworkBehaviour
             gameEndState.Value = GameEndState.DrawByStalemate;
     }
     
+    // Handles player disconnection
     private void OnPlayerDisconnected(ulong clientId)
     {
         if (!IsServer) return;
@@ -233,6 +248,7 @@ public class GameEndManager : NetworkBehaviour
         }
     }
     
+    // Resets UI elements
     private void ResetUIElements()
     {
         if (resignButton != null) resignButton.interactable = true;
